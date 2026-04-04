@@ -366,8 +366,7 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(
     optimizer,
     mode='min',          # 監控指標是越小越好（loss）
     factor=0.5,          # 學習率乘以 0.5
-    patience=5,          # 連續 5 個 epoch 沒改善就降低
-    verbose=True
+    patience=5           # 連續 5 個 epoch 沒改善就降低
 )
 print("\nReduceLROnPlateau：loss 不下降時自動降低學習率")
 print("  用法：scheduler.step(val_loss)")

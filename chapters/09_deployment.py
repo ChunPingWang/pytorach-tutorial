@@ -43,6 +43,7 @@ import torch.nn as nn
 import os
 import time
 import json
+import copy
 
 print("=" * 60)
 print("第九章：模型部署")
@@ -302,7 +303,7 @@ except Exception as e:
 # 技巧四：半精度推論（FP16）
 print("\n技巧四：半精度推論（FP16）")
 if device.type == 'cuda':
-    model_fp16 = model.half()  # 轉成 FP16
+    model_fp16 = copy.deepcopy(model).half()  # 複製後轉成 FP16，避免影響原模型
     input_fp16 = dummy_input.half()
     start = time.time()
     with torch.inference_mode():

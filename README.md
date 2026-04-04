@@ -13,6 +13,7 @@
   <a href="#-課程目錄">課程目錄</a> •
   <a href="#-學習路線">學習路線</a> •
   <a href="#-實戰案例">實戰案例</a> •
+  <a href="#-windows--wsl-環境指南">Windows/WSL</a> •
   <a href="#-常見問題">FAQ</a>
 </p>
 
@@ -76,6 +77,8 @@ Python   >= 3.9
 PyTorch  >= 2.0
 torchvision >= 0.15
 ```
+
+> 本課程支援 **Windows（原生）** 和 **WSL（Windows Subsystem for Linux）** 兩種環境，詳細差異請見下方 [Windows / WSL 環境指南](#-windows--wsl-環境指南)。
 
 ### 2. 安裝步驟
 
@@ -490,6 +493,122 @@ traced.save('model.pt')
 | 10 | 形狀不匹配 | `size mismatch` | 在 forward() 印出每層 shape |
 
 > 📖 完整說明與解法請見 [第十章](chapters/10_best_practices.py)
+
+---
+
+## 🖥 Windows / WSL 環境指南
+
+本課程的所有範例程式碼已在 **Windows（原生）** 和 **WSL（Windows Subsystem for Linux）** 環境下驗證通過。以下說明兩種環境的安裝、編譯與執行方式。
+
+### Windows 原生環境
+
+#### 安裝 Python 與 PyTorch
+
+```powershell
+# 1. 安裝 Python（從 https://www.python.org/downloads/ 下載，安裝時勾選 "Add to PATH"）
+
+# 2. 安裝 PyTorch（開啟 PowerShell 或 CMD）
+pip install torch torchvision torchaudio matplotlib numpy
+
+# 有 NVIDIA GPU 時，使用 CUDA 版本
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+#### 執行範例
+
+```powershell
+# 方法一：設定環境變數後執行（推薦）
+set PYTHONIOENCODING=utf-8
+python chapters\01_tensors.py
+
+# 方法二：一行指令
+set PYTHONIOENCODING=utf-8 && python chapters\01_tensors.py
+
+# 方法三：永久設定（在系統環境變數中加入 PYTHONIOENCODING=utf-8）
+# 設定後可直接執行：
+python chapters\01_tensors.py
+```
+
+> **注意**：Windows 終端機預設編碼（如 cp950）無法顯示程式碼中的 emoji 字元，必須設定 `PYTHONIOENCODING=utf-8` 才能正常顯示。建議將此環境變數加入系統的永久設定中。
+>
+> 永久設定方式：`設定` → `系統` → `進階系統設定` → `環境變數` → 新增使用者變數 `PYTHONIOENCODING`，值設為 `utf-8`。
+
+#### Windows 注意事項
+
+| 項目 | 說明 |
+|------|------|
+| **路徑分隔符** | Windows 使用反斜線 `chapters\01_tensors.py`，但正斜線 `chapters/01_tensors.py` 也可以 |
+| **num_workers** | 所有 DataLoader 已設定 `num_workers=0`，避免 Windows 多程序問題 |
+| **CUDA** | 若有 NVIDIA GPU，安裝 CUDA 版 PyTorch 即可使用 GPU 加速 |
+| **torch.compile** | Windows 尚不支援 Triton，`torch.compile()` 會自動跳過（不影響學習） |
+
+### WSL（Windows Subsystem for Linux）環境
+
+#### 安裝 WSL
+
+```powershell
+# 在 PowerShell（管理員）中執行
+wsl --install
+
+# 安裝完成後重新啟動電腦，設定 Linux 使用者名稱和密碼
+```
+
+#### 在 WSL 中安裝 Python 與 PyTorch
+
+```bash
+# 1. 更新套件管理器
+sudo apt update && sudo apt upgrade -y
+
+# 2. 安裝 Python 和 pip
+sudo apt install -y python3 python3-pip python3-venv
+
+# 3. 建立虛擬環境（建議）
+python3 -m venv ~/pytorch-env
+source ~/pytorch-env/bin/activate
+
+# 4. 安裝 PyTorch
+pip install torch torchvision torchaudio matplotlib numpy
+
+# 有 NVIDIA GPU 時（WSL2 支援 GPU 直通）
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+#### 執行範例
+
+```bash
+# 取得課程
+git clone https://github.com/ChunPingWang/pytorach-tutorial.git
+cd pytorach-tutorial
+
+# 直接執行（Linux 環境下 UTF-8 為預設編碼，無需額外設定）
+python3 chapters/01_tensors.py
+
+# 執行任意章節
+python3 chapters/05_cnn_image_classification.py
+```
+
+#### WSL 注意事項
+
+| 項目 | 說明 |
+|------|------|
+| **編碼** | WSL 預設為 UTF-8，無需設定 `PYTHONIOENCODING` |
+| **GPU 支援** | WSL2 支援 NVIDIA GPU 直通，需安裝 Windows 版 NVIDIA 驅動程式（不要在 WSL 內安裝驅動） |
+| **路徑分隔符** | 使用正斜線 `chapters/01_tensors.py` |
+| **torch.compile** | WSL 環境支援 Triton，`torch.compile()` 可正常運作 |
+| **存取 Windows 檔案** | Windows 磁碟掛載於 `/mnt/c/`、`/mnt/d/` 等路徑 |
+
+### 環境比較總覽
+
+| 比較項目 | Windows 原生 | WSL |
+|----------|:------------:|:---:|
+| 安裝難度 | 簡單 | 中等（需先安裝 WSL） |
+| UTF-8 支援 | 需設定環境變數 | 原生支援 |
+| GPU 加速 | 直接支援 | WSL2 支援（需 Windows 驅動） |
+| torch.compile | 不支援 Triton | 支援 |
+| num_workers > 0 | 需注意（已設為 0） | 正常使用 |
+| 適合場景 | 快速學習、日常開發 | 接近 Linux 生產環境 |
+
+> 💡 **建議**：如果只是想學習 PyTorch 基礎，使用 Windows 原生環境最簡單。如果未來要部署到 Linux 伺服器，建議使用 WSL 以熟悉 Linux 環境。
 
 ---
 
