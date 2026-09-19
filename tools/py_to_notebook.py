@@ -13,6 +13,11 @@
 - 章節開頭 banner 的 `print("=" * 60)` 與章名那行（版本資訊等其他 print 保留）
 加上 --keep-headers 可以保留它們。
 
+另外會自動補上 Google Colab 需要的東西：
+- 開頭的 "Open in Colab" 徽章
+- 「執行環境設定」cell：偵測 Colab、補裝缺少的套件、檢查 GPU（本機執行會略過安裝）
+- notebook metadata 的 colab 設定，訓練章節加上 accelerator: GPU
+
 切割用 ast 解析出「最外層敘述」的行範圍，所以不會切在字串、class、def 中間。
 
 用法：
@@ -41,6 +46,32 @@ SECTION_TITLE = re.compile(r"^\d+\.\d+\s+\S")
 
 # 一個 code cell 累積超過這個行數後，遇到新的註解區塊就切開
 SPLIT_AFTER_LINES = 14
+
+# ── Colab 設定 ───────────────────────────────────────────────
+# 產生 "Open in Colab" 徽章用的 repo 位置
+COLAB_REPO = "ChunPingWang/pytorach-tutorial"
+COLAB_BRANCH = "main"
+
+# 各章在 Colab 需要額外 pip install 的套件（torch / torchvision / numpy 已內建）
+COLAB_EXTRAS = {
+    "09_deployment": ["onnx", "onnxruntime"],
+}
+
+# 會實際訓練模型、建議開 GPU 執行階段的章節
+GPU_CHAPTERS = {
+    "05_cnn_image_classification",
+    "06_nlp_text_classification",
+    "07_transfer_learning",
+    "08_gan",
+}
+
+# 需要提醒使用者「會下載資料」的章節
+DOWNLOAD_NOTES = {
+    "05_cnn_image_classification": "第一次執行會下載 CIFAR-10 資料集（約 170 MB）到 `./data`。",
+    "07_transfer_learning": "第一次執行會下載 ResNet18 預訓練權重（約 45 MB）。",
+    "08_gan": "第一次執行會下載 MNIST 資料集（約 10 MB）到 `./data`。",
+    "09_deployment": "本章會在工作目錄產生 `.pth` / `.onnx` 等模型檔。",
+}
 
 # 小節標頭 print，例如 print("\n\n📌 1.2 資料型別（dtype）")
 HEADER_PRINT = re.compile(r"""^print\(\s*f?["'](?:\\n)*\s*📌""")
@@ -116,6 +147,85 @@ def docstring_to_markdown(doc: str) -> str:
             continue
         cleaned.append(line)
     return "\n".join(cleaned).strip("\n")
+
+
+# ─────────────────────────────────────────────────────────────
+# Colab 徽章與環境設定 cell
+# ─────────────────────────────────────────────────────────────
+def colab_badge(stem: str) -> str:
+    url = (
+        f"https://colab.research.google.com/github/{COLAB_REPO}"
+        f"/blob/{COLAB_BRANCH}/notebooks/{stem}.ipynb"
+    )
+    return (
+        f"[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)]({url})"
+    )
+
+
+def colab_cells(stem: str) -> list[dict]:
+    """產生「執行環境設定」的 Markdown + Code cell。
+
+    設定 cell 在 Colab 會自動補裝缺少的套件、提醒開 GPU；
+    在本機執行則只印出環境資訊，不會動到你的套件。
+    """
+    extras = COLAB_EXTRAS.get(stem, [])
+
+    notes = ["> 這個 Notebook 在 **Google Colab** 和**本機 Jupyter** 都能直接執行。"]
+    if stem in GPU_CHAPTERS:
+        notes.append(
+            "> ⚡ 本章會實際訓練模型，在 Colab 請先開 GPU："
+            "**執行階段 → 變更執行階段類型 → T4 GPU**。"
+        )
+    if extras:
+        notes.append(f"> 📦 需要額外套件：`{'`、`'.join(extras)}`，下方 cell 會自動安裝。")
+    if stem in DOWNLOAD_NOTES:
+        notes.append(f"> 💾 {DOWNLOAD_NOTES[stem]}")
+    notes.append("> Colab 的檔案在執行階段結束後會清空，需要保留請下載或掛載 Google Drive。")
+
+    # 每則說明中間夾一行 ">"，Markdown 才會分段而不是黏成一坨
+    md = "## 🚀 執行環境設定\n\n" + "\n>\n".join(notes)
+
+    if extras:
+        required = ", ".join(f'"{p}"' for p in extras)
+        install = f'''
+REQUIRED = [{required}]  # 這章需要、但 Colab 沒有內建的套件
+missing = [p for p in REQUIRED if importlib.util.find_spec(p) is None]
+
+if missing:
+    if IN_COLAB:
+        print(f"安裝缺少的套件：{{', '.join(missing)}}")
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-q", *missing], check=True
+        )
+    else:
+        print(f"⚠️ 本機缺少套件：pip install {{' '.join(missing)}}")
+'''
+        imports = "import importlib.util\nimport subprocess\nimport sys\n"
+    else:
+        install = ""
+        imports = "import importlib.util\n"
+
+    code = f'''# 在 Colab 會自動補裝套件並檢查 GPU；在本機執行只會印出環境資訊
+{imports}
+IN_COLAB = importlib.util.find_spec("google.colab") is not None
+{install}
+import torch
+
+print(f"執行環境：{{'Google Colab' if IN_COLAB else '本機'}}")
+print(f"PyTorch 版本：{{torch.__version__}}")
+print(f"CUDA 可用：{{torch.cuda.is_available()}}")
+
+if torch.cuda.is_available():
+    print(f"GPU：{{torch.cuda.get_device_name(0)}}")
+elif IN_COLAB:
+    print("⚠️ 目前是 CPU 執行階段，需要 GPU 請切換：執行階段 → 變更執行階段類型 → T4 GPU")
+'''
+
+    md_cell = make_cell("markdown", md)
+    code_cell = make_cell("code", code.strip("\n"))
+    for cell in (md_cell, code_cell):
+        cell["metadata"]["colab_setup"] = True  # 驗證時要跳過這兩格
+    return [md_cell, code_cell]
 
 
 # ─────────────────────────────────────────────────────────────
@@ -335,9 +445,13 @@ def convert(path: Path, strip_headers: bool = True) -> tuple[dict, set[int]]:
         and isinstance(tree.body[0].value.value, str)
     ):
         doc_node = tree.body[0]
-        cells.append(make_cell("markdown", docstring_to_markdown(doc_node.value.value)))
+        # 徽章放在最上面，從 GitHub 開這個檔案時可以直接點去 Colab
+        title_md = colab_badge(path.stem) + "\n\n" + docstring_to_markdown(doc_node.value.value)
+        cells.append(make_cell("markdown", title_md))
         start_line = doc_node.end_lineno + 1
         tree.body = tree.body[1:]
+
+    cells.extend(colab_cells(path.stem))
 
     items = build_items(src_lines, start_line, tree)
     cells.extend(items_to_cells(items, src_lines, drop))
@@ -359,10 +473,18 @@ def convert(path: Path, strip_headers: bool = True) -> tuple[dict, set[int]]:
                 "nbconvert_exporter": "python",
                 "codemirror_mode": {"name": "ipython", "version": 3},
             },
+            # Colab 專用設定：保留目錄側欄，訓練章節預設用 GPU 執行階段開啟
+            "colab": {
+                "name": f"{path.stem}.ipynb",
+                "provenance": [],
+                "toc_visible": True,
+            },
         },
         "nbformat": 4,
         "nbformat_minor": 5,
     }
+    if path.stem in GPU_CHAPTERS:
+        notebook["metadata"]["accelerator"] = "GPU"
     return notebook, drop
 
 
@@ -399,6 +521,8 @@ def verify(path: Path, notebook: dict, drop: set[int]) -> None:
     for cell in notebook["cells"]:
         if cell["cell_type"] != "code":
             continue
+        if cell["metadata"].get("colab_setup"):
+            continue  # 這是外加的環境設定 cell，不在原始檔裡
         for line in "".join(cell["source"]).split("\n"):
             if line.strip():
                 got.append(line.rstrip())

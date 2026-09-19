@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="#-快速開始">快速開始</a> •
+  <a href="#6-用-google-colab-學習不用裝任何東西">Colab</a> •
   <a href="#-課程目錄">課程目錄</a> •
   <a href="#-學習路線">學習路線</a> •
   <a href="#-實戰案例">實戰案例</a> •
@@ -129,7 +130,34 @@ python tools/py_to_notebook.py chapters/01_tensors.py   # 單一章節
 python tools/py_to_notebook.py --keep-headers           # 保留標頭 print
 ```
 
-### 6. 驗證安裝
+### 6. 用 Google Colab 學習（不用裝任何東西）
+
+沒有 GPU、或不想在本機安裝環境，可以直接用 Colab 開啟 —
+點[課程目錄](#-課程目錄)每一章後面的 ![Colab](https://colab.research.google.com/assets/colab-badge.svg) 徽章即可。
+
+| 項目 | 說明 |
+|------|------|
+| **PyTorch 安裝** | Colab 已內建 `torch` / `torchvision` / `numpy`，不用安裝 |
+| **額外套件** | 每章開頭的「🚀 執行環境設定」cell 會自動補裝該章缺少的套件（例如第 9 章的 `onnx`、`onnxruntime`） |
+| **開啟 GPU** | 第 5～8 章已在 notebook 設定 `accelerator: GPU`；若仍是 CPU，請手動切換**執行階段 → 變更執行階段類型 → T4 GPU** |
+| **資料集** | CIFAR-10 / MNIST 會自動下載到 Colab 的 `./data`，不需事先準備 |
+| **檔案保存** | Colab 執行階段結束後檔案會清空，訓練好的模型請自行下載或存到 Google Drive |
+
+```python
+# 在 Colab 把訓練好的模型下載到本機
+from google.colab import files
+files.download('model.pth')
+
+# 或掛載 Google Drive，直接存到雲端硬碟
+from google.colab import drive
+drive.mount('/content/drive')
+torch.save(model.state_dict(), '/content/drive/MyDrive/model.pth')
+```
+
+> 💡 每章第一個 cell 會印出執行環境、PyTorch 版本與 GPU 型號，
+> 先跑那一格確認環境沒問題，再往下執行。
+
+### 7. 驗證安裝
 
 ```python
 import torch
@@ -145,33 +173,33 @@ print(f"CUDA 版本: {torch.version.cuda}")
 
 ### 第一部分：基礎概念
 
-| 章節 | 主題 | 核心內容 | 行數 |
-|:----:|------|----------|:----:|
-| [01](chapters/01_tensors.py) | **Tensor 張量基礎** | 建立 Tensor、基本運算、索引切片、形狀操作、Broadcasting、GPU 加速、NumPy 互轉 | 464 |
-| [02](chapters/02_autograd.py) | **自動微分 Autograd** | requires_grad、計算圖、反向傳播、梯度累加陷阱、停止追蹤、用 Autograd 實作線性迴歸 | 342 |
+| 章節 | 主題 | 核心內容 | 行數 | Colab |
+|:----:|------|----------|:----:|:-----:|
+| [01](chapters/01_tensors.py) | **Tensor 張量基礎** | 建立 Tensor、基本運算、索引切片、形狀操作、Broadcasting、GPU 加速、NumPy 互轉 | 464 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/01_tensors.ipynb) |
+| [02](chapters/02_autograd.py) | **自動微分 Autograd** | requires_grad、計算圖、反向傳播、梯度累加陷阱、停止追蹤、用 Autograd 實作線性迴歸 | 342 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/02_autograd.ipynb) |
 
 ### 第二部分：模型建構
 
-| 章節 | 主題 | 核心內容 | 行數 |
-|:----:|------|----------|:----:|
-| [03](chapters/03_neural_networks.py) | **神經網路建構** | nn.Module、nn.Sequential、激活函數、CNN 基礎、Dropout/BatchNorm/Embedding、殘差連接 | 466 |
-| [04](chapters/04_training_workflow.py) | **訓練工作流程** | Loss Function、Optimizer、Dataset/DataLoader、完整訓練迴圈、學習率排程、Early Stopping | 600 |
+| 章節 | 主題 | 核心內容 | 行數 | Colab |
+|:----:|------|----------|:----:|:-----:|
+| [03](chapters/03_neural_networks.py) | **神經網路建構** | nn.Module、nn.Sequential、激活函數、CNN 基礎、Dropout/BatchNorm/Embedding、殘差連接 | 466 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/03_neural_networks.ipynb) |
+| [04](chapters/04_training_workflow.py) | **訓練工作流程** | Loss Function、Optimizer、Dataset/DataLoader、完整訓練迴圈、學習率排程、Early Stopping | 600 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/04_training_workflow.ipynb) |
 
 ### 第三部分：實戰應用
 
-| 章節 | 主題 | 核心內容 | 行數 |
-|:----:|------|----------|:----:|
-| [05](chapters/05_cnn_image_classification.py) | **實戰：CNN 影像辨識** | CIFAR-10 資料集、資料增強、CNN 架構設計、VGG 風格網路、類別準確率分析 | 434 |
-| [06](chapters/06_nlp_text_classification.py) | **實戰：NLP 文字分類** | 文字前處理、詞嵌入、RNN/LSTM、雙向 LSTM 情感分析、Packed Sequences | 525 |
-| [07](chapters/07_transfer_learning.py) | **遷移學習** | 預訓練模型載入、Feature Extraction、Fine-tuning、差異化學習率、ImageFolder | 431 |
-| [08](chapters/08_gan.py) | **實戰：生成對抗網路** | GAN 原理、Generator/Discriminator 設計、對抗訓練、CGAN 條件式生成 | 448 |
+| 章節 | 主題 | 核心內容 | 行數 | Colab |
+|:----:|------|----------|:----:|:-----:|
+| [05](chapters/05_cnn_image_classification.py) | **實戰：CNN 影像辨識** | CIFAR-10 資料集、資料增強、CNN 架構設計、VGG 風格網路、類別準確率分析 | 434 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/05_cnn_image_classification.ipynb) |
+| [06](chapters/06_nlp_text_classification.py) | **實戰：NLP 文字分類** | 文字前處理、詞嵌入、RNN/LSTM、雙向 LSTM 情感分析、Packed Sequences | 525 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/06_nlp_text_classification.ipynb) |
+| [07](chapters/07_transfer_learning.py) | **遷移學習** | 預訓練模型載入、Feature Extraction、Fine-tuning、差異化學習率、ImageFolder | 431 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/07_transfer_learning.ipynb) |
+| [08](chapters/08_gan.py) | **實戰：生成對抗網路** | GAN 原理、Generator/Discriminator 設計、對抗訓練、CGAN 條件式生成 | 448 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/08_gan.ipynb) |
 
 ### 第四部分：進階部署
 
-| 章節 | 主題 | 核心內容 | 行數 |
-|:----:|------|----------|:----:|
-| [09](chapters/09_deployment.py) | **模型部署** | 模型儲存/載入/Checkpoint、TorchScript、ONNX 匯出、推論優化、Flask/FastAPI 服務化 | 536 |
-| [10](chapters/10_best_practices.py) | **最佳實踐** | 10 大常見錯誤、記憶體管理、可重現性、訓練技巧集錦、專案結構、效能分析 | 617 |
+| 章節 | 主題 | 核心內容 | 行數 | Colab |
+|:----:|------|----------|:----:|:-----:|
+| [09](chapters/09_deployment.py) | **模型部署** | 模型儲存/載入/Checkpoint、TorchScript、ONNX 匯出、推論優化、Flask/FastAPI 服務化 | 536 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/09_deployment.ipynb) |
+| [10](chapters/10_best_practices.py) | **最佳實踐** | 10 大常見錯誤、記憶體管理、可重現性、訓練技巧集錦、專案結構、效能分析 | 617 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/10_best_practices.ipynb) |
 
 > 📊 **總計 4,863 行**教學程式碼，每行都有中文註解。
 
@@ -332,9 +360,9 @@ pytorach-tutorial/
 ├── 📄 README.md                              ← 你正在看的這個檔案
 │
 ├── 📁 notebooks/                             ← 每章對應的 Jupyter Notebook
-│   ├── 01_tensors.ipynb                      # 內容與 chapters/*.py 相同
+│   ├── 01_tensors.ipynb                      # 程式碼與 chapters/*.py 相同
 │   ├── ...                                   # 已依小節切成 cell，可逐格執行
-│   └── 10_best_practices.ipynb
+│   └── 10_best_practices.ipynb               # 內含 Colab 徽章與環境設定 cell
 │
 ├── 📁 tools/                                 ← 輔助工具
 │   └── py_to_notebook.py                     # chapters/*.py → notebooks/*.ipynb
@@ -644,7 +672,17 @@ python3 chapters/05_cnn_image_classification.py
 <details>
 <summary><b>Q: 沒有 GPU 可以學嗎？</b></summary>
 
-可以！所有章節都能在 CPU 上執行。GPU 只是讓訓練速度更快，不影響學習。建議可以用 [Google Colab](https://colab.research.google.com/)（免費 GPU）來練習較大的模型。
+可以！所有章節都能在 CPU 上執行。GPU 只是讓訓練速度更快，不影響學習。建議可以用 [Google Colab](https://colab.research.google.com/)（免費 GPU）來練習較大的模型 — 點[課程目錄](#-課程目錄)每章後面的 Colab 徽章就能直接開啟。
+</details>
+
+<details>
+<summary><b>Q: 在 Colab 上要先裝什麼嗎？</b></summary>
+
+不用。Colab 已內建 `torch` / `torchvision` / `numpy`，每章第一個「🚀 執行環境設定」cell 會自動偵測環境、補裝該章缺少的套件（例如第 9 章的 `onnx`、`onnxruntime`），並印出 GPU 資訊。
+
+第 5～8 章要訓練模型，notebook 已設定用 GPU 執行階段開啟；如果設定 cell 顯示「目前是 CPU 執行階段」，手動切換 **執行階段 → 變更執行階段類型 → T4 GPU** 再重跑即可。
+
+注意 Colab 的檔案（`./data` 的資料集、訓練出的 `.pth`）在執行階段結束後會清空，需要保留請用 `files.download()` 下載或掛載 Google Drive。
 </details>
 
 <details>
