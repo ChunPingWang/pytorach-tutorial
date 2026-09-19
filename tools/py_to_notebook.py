@@ -11,6 +11,7 @@
 因為小節標題已經變成 Markdown，預設會把純粹用來排版的標頭 print 拿掉：
 - `print("\\n📌 1.1 建立 Tensor...")` 以及緊接在後面的 `print("-" * 40)`
 - 章節開頭 banner 的 `print("=" * 60)` 與章名那行（版本資訊等其他 print 保留）
+- 章末的「第 N 章結束！下一章：…」banner，改成結尾的 Markdown cell 並附下一章連結
 加上 --keep-headers 可以保留它們。
 
 另外會自動補上 Google Colab 需要的東西：
@@ -79,6 +80,12 @@ HEADER_PRINT = re.compile(r"""^print\(\s*f?["'](?:\\n)*\s*📌""")
 RULER_PRINT = re.compile(r"""^print\(\s*["'][-=]["']\s*\*\s*\d+\s*\)\s*$""")
 # 章節 banner 裡的章名，例如 print("第一章：PyTorch Tensor 張量基礎")
 CHAPTER_TITLE_PRINT = re.compile(r"""^print\(\s*f?["']第.{1,3}章[：:]""")
+# 章末 banner 的橫線，可能前面接了換行，例如 print("\n\n" + "=" * 60)
+FOOTER_RULER_PRINT = re.compile(
+    r"""^print\(\s*(?:["'](?:\\n)+["']\s*\+\s*)?["'][-=]["']\s*\*\s*\d+\s*\)\s*$"""
+)
+# 章末 banner 的結語，例如 print("第一章結束！下一章：自動微分 Autograd")
+FOOTER_TEXT_PRINT = re.compile(r"""^print\(\s*f?["'].*(?:章結束|課程結束)""")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -224,7 +231,7 @@ elif IN_COLAB:
     md_cell = make_cell("markdown", md)
     code_cell = make_cell("code", code.strip("\n"))
     for cell in (md_cell, code_cell):
-        cell["metadata"]["colab_setup"] = True  # 驗證時要跳過這兩格
+        cell["metadata"]["added_by_converter"] = True  # 驗證時要跳過這兩格
     return [md_cell, code_cell]
 
 
@@ -262,6 +269,63 @@ def find_header_prints(src_lines: list[str]) -> set[int]:
         break  # 只處理檔案最上方那一組
 
     return drop
+
+
+def find_footer_banner(src_lines: list[str]) -> tuple[set[int], str | None]:
+    """找出檔案最後那組「第 N 章結束」banner。
+
+    回傳要拿掉的行號，以及結語文字（給 Markdown 用）；找不到就回傳空的。
+    """
+    for i in range(len(src_lines) - 1, 1, -1):
+        line = src_lines[i].strip()
+        if not FOOTER_TEXT_PRINT.match(line):
+            continue
+        if not FOOTER_RULER_PRINT.match(src_lines[i - 1].strip()):
+            return set(), None
+        if i + 1 >= len(src_lines) or not FOOTER_RULER_PRINT.match(src_lines[i + 1].strip()):
+            return set(), None
+        try:  # 用 ast 取出 print 裡的字串，避免自己剝引號
+            call = ast.parse(line).body[0].value
+            message = call.args[0].value
+        except (SyntaxError, AttributeError, IndexError):
+            return set(), None
+        if not isinstance(message, str):
+            return set(), None
+        return {i, i + 1, i + 2}, message  # 1-based：橫線、結語、橫線
+    return set(), None
+
+
+def next_chapter_stem(stem: str) -> str | None:
+    """依檔名排序找出下一章，最後一章回傳 None。"""
+    stems = sorted(p.stem for p in CHAPTER_DIR.glob("*.py"))
+    if stem in stems:
+        index = stems.index(stem)
+        if index + 1 < len(stems):
+            return stems[index + 1]
+    return None
+
+
+def footer_cell(message: str, next_stem: str | None) -> dict:
+    """把章末 banner 做成 Markdown cell，並附上下一章的連結。"""
+    head, _, rest = message.partition("！")
+    md = ["---", "", f"## 🎉 {head}！"]
+
+    nxt = rest.strip()
+    if nxt.startswith("下一章："):
+        nxt = nxt[len("下一章："):]
+    if nxt and next_stem:
+        md += [
+            "",
+            f"**下一章：{nxt}**",
+            "",
+            f"{colab_badge(next_stem)} ｜ [{next_stem}.ipynb]({next_stem}.ipynb)",
+        ]
+    elif nxt:
+        md += ["", f"**{nxt}**"]
+
+    cell = make_cell("markdown", "\n".join(md))
+    cell["metadata"]["added_by_converter"] = True  # 同樣是外加的 cell
+    return cell
 
 
 # ─────────────────────────────────────────────────────────────
@@ -432,7 +496,13 @@ def convert(path: Path, strip_headers: bool = True) -> tuple[dict, set[int]]:
     src = path.read_text(encoding="utf-8")
     src_lines = src.split("\n")
     tree = ast.parse(src)
-    drop = find_header_prints(src_lines) if strip_headers else set()
+
+    drop: set[int] = set()
+    footer_message = None
+    if strip_headers:
+        drop |= find_header_prints(src_lines)
+        footer_drop, footer_message = find_footer_banner(src_lines)
+        drop |= footer_drop
 
     cells: list[dict] = []
     start_line = 1
@@ -455,6 +525,10 @@ def convert(path: Path, strip_headers: bool = True) -> tuple[dict, set[int]]:
 
     items = build_items(src_lines, start_line, tree)
     cells.extend(items_to_cells(items, src_lines, drop))
+
+    # 章末 banner → Markdown，並附上下一章的連結
+    if footer_message:
+        cells.append(footer_cell(footer_message, next_chapter_stem(path.stem)))
 
     notebook = {
         "cells": cells,
@@ -521,8 +595,8 @@ def verify(path: Path, notebook: dict, drop: set[int]) -> None:
     for cell in notebook["cells"]:
         if cell["cell_type"] != "code":
             continue
-        if cell["metadata"].get("colab_setup"):
-            continue  # 這是外加的環境設定 cell，不在原始檔裡
+        if cell["metadata"].get("added_by_converter"):
+            continue  # 外加的 cell（環境設定等），不在原始檔裡
         for line in "".join(cell["source"]).split("\n"):
             if line.strip():
                 got.append(line.rstrip())

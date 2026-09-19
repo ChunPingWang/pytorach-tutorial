@@ -115,7 +115,8 @@ python chapters/05_cnn_image_classification.py
 
 `notebooks/` 底下有每一章對應的 `.ipynb`，程式碼與 `chapters/*.py` 完全相同，
 但已依小節切成 cell，可以一格一格執行、隨時修改參數做實驗。
-小節標題改用 Markdown 呈現，原本純排版用的標頭 print 則已移除。
+小節標題與章末結語改用 Markdown 呈現，原本純排版用的標頭 print 則已移除；
+每章結尾附有下一章的連結，可以一路往下讀完整套課程。
 
 ```bash
 pip install jupyterlab
