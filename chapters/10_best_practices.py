@@ -29,6 +29,23 @@ print("=" * 60)
 print("第十章：最佳實踐與常見錯誤")
 print("=" * 60)
 
+
+
+def get_device():
+    """自動選擇運算裝置：NVIDIA CUDA → Apple Silicon MPS → CPU
+
+    同一份程式碼在 Colab（CUDA GPU）、Mac（MPS GPU）、純 CPU 環境都能直接執行。
+    """
+    if torch.cuda.is_available():
+        return torch.device("cuda")      # NVIDIA GPU（Colab / Windows / Linux）
+    if torch.backends.mps.is_available():
+        return torch.device("mps")       # Apple Silicon GPU（M 系列 Mac）
+    return torch.device("cpu")           # 都沒有就用 CPU，一樣跑得動
+
+
+device = get_device()
+print(f"使用裝置: {device}")
+
 # ─────────────────────────────────────────────────────────────
 # 10.1 十大最常見的 PyTorch 錯誤
 # ─────────────────────────────────────────────────────────────
@@ -101,7 +118,7 @@ print("""
 
   正確做法：
   ```python
-  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+  device = get_device()          # cuda / mps / cpu 自動選
   model = model.to(device)
   for inputs, labels in dataloader:
       inputs = inputs.to(device)    # ← 資料也要搬到同一裝置
@@ -279,30 +296,38 @@ print("""
 """)
 
 # 混合精度範例
+# 注意：GradScaler（loss 縮放）目前只有 CUDA 支援，
+#      MPS 可以用 autocast，但不需要也不能用 GradScaler
 print("混合精度訓練範例：")
-if torch.cuda.is_available():
-    model = nn.Linear(100, 10).cuda()
+if device.type in ('cuda', 'mps'):
+    model = nn.Linear(100, 10).to(device)
     optimizer = optim.Adam(model.parameters())
-    scaler = torch.amp.GradScaler('cuda')
+    use_scaler = device.type == 'cuda'
+    scaler = torch.amp.GradScaler(device.type) if use_scaler else None
 
-    x = torch.rand(32, 100).cuda()
-    y = torch.randint(0, 10, (32,)).cuda()
+    x = torch.rand(32, 100).to(device)
+    y = torch.randint(0, 10, (32,)).to(device)
 
     optimizer.zero_grad()
-    with torch.amp.autocast('cuda'):      # 自動選擇 FP16/FP32
+    with torch.amp.autocast(device.type):  # 自動選擇 FP16/FP32
         output = model(x)
         loss = nn.CrossEntropyLoss()(output, y)
 
-    scaler.scale(loss).backward()         # 縮放 loss 防止 FP16 underflow
-    scaler.step(optimizer)
-    scaler.update()
-    print(f"  混合精度 loss: {loss.item():.4f}")
+    if use_scaler:
+        scaler.scale(loss).backward()      # 縮放 loss 防止 FP16 underflow
+        scaler.step(optimizer)
+        scaler.update()
+    else:
+        loss.backward()                    # MPS：直接 backward，不用縮放
+        optimizer.step()
+    print(f"  混合精度 loss（{device.type}）: {loss.item():.4f}")
 else:
-    print("  （需要 GPU 才能使用混合精度）")
+    print("  （需要 GPU — CUDA 或 MPS — 才能使用混合精度）")
 
 print("""
   4. 其他記憶體節省技巧：
-     - del tensor; torch.cuda.empty_cache()
+     - del tensor 之後清快取：
+       CUDA → torch.cuda.empty_cache()   MPS → torch.mps.empty_cache()
      - 使用 checkpoint（犧牲速度換記憶體）
        from torch.utils.checkpoint import checkpoint
      - 減小模型（用較少的 channels/layers）
@@ -317,14 +342,19 @@ print("\n\n📌 10.3 可重現性（Reproducibility）")
 print("-" * 40)
 
 def set_seed(seed=42):
-    """設定所有隨機種子，確保結果可重現"""
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)  # 多 GPU
+    """設定所有隨機種子，確保結果可重現（CUDA / MPS / CPU 都適用）"""
+    torch.manual_seed(seed)           # CPU，也會連帶設定各後端的預設種子
     np.random.seed(seed)
     random.seed(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)      # 多 GPU
+        torch.backends.cudnn.deterministic = True   # cuDNN 專屬，MPS 沒有
+        torch.backends.cudnn.benchmark = False
+
+    if torch.backends.mps.is_available():
+        torch.mps.manual_seed(seed)
 
 set_seed(42)
 print("隨機種子已設定為 42")
@@ -509,11 +539,15 @@ try:
 except Exception as e:
     print(f"  Profiler 不可用: {e}")
 
-# 記憶體使用量追蹤
-if torch.cuda.is_available():
-    print(f"\nGPU 記憶體使用：")
+# 記憶體使用量追蹤（CUDA 和 MPS 的 API 不一樣）
+if device.type == 'cuda':
+    print(f"\nGPU 記憶體使用（CUDA）：")
     print(f"  已分配: {torch.cuda.memory_allocated() / 1024**2:.1f} MB")
     print(f"  快取:   {torch.cuda.memory_reserved() / 1024**2:.1f} MB")
+elif device.type == 'mps':
+    print(f"\nGPU 記憶體使用（MPS）：")
+    print(f"  已分配: {torch.mps.current_allocated_memory() / 1024**2:.1f} MB")
+    print(f"  驅動配置: {torch.mps.driver_allocated_memory() / 1024**2:.1f} MB")
 
 
 # ─────────────────────────────────────────────────────────────

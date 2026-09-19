@@ -56,7 +56,20 @@ print("=" * 60)
 print("第八章：實戰 — 生成對抗網路（GAN）")
 print("=" * 60)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def get_device():
+    """自動選擇運算裝置：NVIDIA CUDA → Apple Silicon MPS → CPU
+
+    同一份程式碼在 Colab（CUDA GPU）、Mac（MPS GPU）、純 CPU 環境都能直接執行。
+    """
+    if torch.cuda.is_available():
+        return torch.device("cuda")      # NVIDIA GPU（Colab / Windows / Linux）
+    if torch.backends.mps.is_available():
+        return torch.device("mps")       # Apple Silicon GPU（M 系列 Mac）
+    return torch.device("cpu")           # 都沒有就用 CPU，一樣跑得動
+
+
+device = get_device()
 print(f"使用裝置: {device}")
 
 # ─────────────────────────────────────────────────────────────

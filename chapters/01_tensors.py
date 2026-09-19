@@ -324,37 +324,67 @@ print(f"\n圖片加權: {image.shape} * {channel_weights.shape} → {weighted.sh
 print("\n\n📌 1.7 GPU 加速")
 print("-" * 40)
 
-# 檢查 GPU 是否可用
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-    print(f"使用 GPU: {torch.cuda.get_device_name(0)}")
+# PyTorch 有兩種 GPU 後端，取決於你的硬體：
+#
+#   後端    硬體                      怎麼檢查
+#   ─────  ───────────────────────   ──────────────────────────────────
+#   cuda    NVIDIA 顯示卡             torch.cuda.is_available()
+#           （Colab、Windows、Linux）
+#   mps     Apple Silicon             torch.backends.mps.is_available()
+#           （M1/M2/M3/M4/M5 Mac）
+#   cpu     都沒有的話                 永遠可用，只是比較慢
+#
+# 注意：Mac 上沒有 CUDA！寫 torch.cuda.is_available() 在 Mac 永遠是 False，
+#      要用 MPS 才吃得到 Apple Silicon 的 GPU。
 
-    # 方法一：建立時直接放到 GPU
-    gpu_tensor = torch.rand(1000, 1000, device=device)
+print(f"CUDA（NVIDIA GPU）可用：{torch.cuda.is_available()}")
+print(f"MPS（Apple Silicon GPU）可用：{torch.backends.mps.is_available()}")
 
-    # 方法二：從 CPU 搬到 GPU
-    cpu_tensor = torch.rand(1000, 1000)
-    gpu_tensor2 = cpu_tensor.to(device)
-    # 也可以寫成 cpu_tensor.cuda()
 
-    # GPU 運算
-    result = gpu_tensor @ gpu_tensor2
+# 最佳實踐：寫一個能自動偵測裝置的函式，同一份程式碼到哪都能跑
+def get_device():
+    """自動選擇運算裝置：NVIDIA CUDA → Apple Silicon MPS → CPU"""
+    if torch.cuda.is_available():
+        return torch.device("cuda")      # NVIDIA GPU（Colab / Windows / Linux）
+    if torch.backends.mps.is_available():
+        return torch.device("mps")       # Apple Silicon GPU（M 系列 Mac）
+    return torch.device("cpu")           # 都沒有就用 CPU，一樣跑得動
 
-    # 搬回 CPU（要轉成 NumPy 或印出時需要）
-    cpu_result = result.cpu()
-    print(f"  GPU 計算完成，結果形狀: {cpu_result.shape}")
 
-    # 注意：CPU Tensor 和 GPU Tensor 不能直接運算！
-    # torch.add(cpu_tensor, gpu_tensor)  # 這會報錯！
-else:
-    print("沒有 GPU，使用 CPU 模式")
-    print("（在 CPU 上所有操作一樣可以執行，只是較慢）")
-    device = torch.device("cpu")
-
-# 最佳實踐：寫能自動偵測裝置的程式碼
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = get_device()
 print(f"\n自動選擇裝置: {device}")
+
+# 印出裝置名稱（只有 CUDA 查得到型號）
+if device.type == "cuda":
+    print(f"  GPU 型號: {torch.cuda.get_device_name(0)}")
+elif device.type == "mps":
+    print("  使用 Apple Silicon 內建 GPU")
+else:
+    print("  沒有 GPU，所有操作一樣可以執行，只是較慢")
+
+# 方法一：建立時直接放到指定裝置
+gpu_tensor = torch.rand(1000, 1000, device=device)
+
+# 方法二：從 CPU 搬到指定裝置
+cpu_tensor = torch.rand(1000, 1000)
+gpu_tensor2 = cpu_tensor.to(device)
+# 也可以寫成 cpu_tensor.cuda()，但那樣就只能在 NVIDIA GPU 上跑了，不建議
+
+# 在該裝置上運算
+result = gpu_tensor @ gpu_tensor2
+
+# 搬回 CPU（要轉成 NumPy 或給其他函式庫用時需要）
+cpu_result = result.cpu()
+print(f"  計算完成，結果形狀: {cpu_result.shape}")
+
+# 注意：不同裝置上的 Tensor 不能直接運算！
+# torch.add(cpu_tensor, gpu_tensor)  # 裝置不同會報錯！
+
 data = torch.rand(100, 100, device=device)  # 自動放到正確的裝置上
+
+# MPS 小提醒：少數算子還沒支援 MPS，遇到 NotImplementedError 時可以設環境變數
+# 讓它自動退回 CPU 執行：
+#   export PYTORCH_ENABLE_MPS_FALLBACK=1
 
 
 # ─────────────────────────────────────────────────────────────

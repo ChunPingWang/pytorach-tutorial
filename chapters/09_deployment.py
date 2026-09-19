@@ -49,7 +49,20 @@ print("=" * 60)
 print("第九章：模型部署")
 print("=" * 60)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def get_device():
+    """自動選擇運算裝置：NVIDIA CUDA → Apple Silicon MPS → CPU
+
+    同一份程式碼在 Colab（CUDA GPU）、Mac（MPS GPU）、純 CPU 環境都能直接執行。
+    """
+    if torch.cuda.is_available():
+        return torch.device("cuda")      # NVIDIA GPU（Colab / Windows / Linux）
+    if torch.backends.mps.is_available():
+        return torch.device("mps")       # Apple Silicon GPU（M 系列 Mac）
+    return torch.device("cpu")           # 都沒有就用 CPU，一樣跑得動
+
+
+device = get_device()
 
 # 建立一個範例模型
 class ImageClassifier(nn.Module):
@@ -301,8 +314,9 @@ except Exception as e:
     print(f"  torch.compile 不可用: {e}")
 
 # 技巧四：半精度推論（FP16）
+# CUDA 和 MPS 都支援 FP16；CPU 上 FP16 通常不會比較快，所以跳過
 print("\n技巧四：半精度推論（FP16）")
-if device.type == 'cuda':
+if device.type in ('cuda', 'mps'):
     model_fp16 = copy.deepcopy(model).half()  # 複製後轉成 FP16，避免影響原模型
     input_fp16 = dummy_input.half()
     start = time.time()
@@ -312,7 +326,7 @@ if device.type == 'cuda':
     elapsed = time.time() - start
     print(f"  FP16 100 次推論耗時: {elapsed:.4f} 秒")
 else:
-    print("  FP16 加速主要在 GPU 上有效")
+    print("  FP16 加速主要在 GPU（CUDA / MPS）上有效，CPU 上略過")
 
 # 技巧五：批次推論（充分利用 GPU）
 print("\n技巧五：批次推論（Batch Inference）")
@@ -350,7 +364,11 @@ import io
 app = Flask(__name__)
 
 # 載入模型
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(
+    "cuda" if torch.cuda.is_available()
+    else "mps" if torch.backends.mps.is_available()
+    else "cpu"
+)
 model = ImageClassifier(num_classes=10)
 model.load_state_dict(torch.load("saved_models/model_weights.pth",
                                   weights_only=True,
@@ -432,7 +450,11 @@ import io
 app = FastAPI(title="Image Classifier API", version="1.0")
 
 # 載入模型（啟動時執行一次）
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(
+    "cuda" if torch.cuda.is_available()
+    else "mps" if torch.backends.mps.is_available()
+    else "cpu"
+)
 model = None  # 在 startup 事件中載入
 
 @app.on_event("startup")

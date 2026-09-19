@@ -220,12 +220,17 @@ import torch
 
 print(f"執行環境：{{'Google Colab' if IN_COLAB else '本機'}}")
 print(f"PyTorch 版本：{{torch.__version__}}")
-print(f"CUDA 可用：{{torch.cuda.is_available()}}")
+print(f"CUDA（NVIDIA GPU）可用：{{torch.cuda.is_available()}}")
+print(f"MPS（Apple Silicon GPU）可用：{{torch.backends.mps.is_available()}}")
 
 if torch.cuda.is_available():
-    print(f"GPU：{{torch.cuda.get_device_name(0)}}")
+    print(f"→ 使用 CUDA：{{torch.cuda.get_device_name(0)}}")
+elif torch.backends.mps.is_available():
+    print("→ 使用 Apple Silicon 內建 GPU（MPS）")
 elif IN_COLAB:
-    print("⚠️ 目前是 CPU 執行階段，需要 GPU 請切換：執行階段 → 變更執行階段類型 → T4 GPU")
+    print("→ 使用 CPU；需要 GPU 請切換：執行階段 → 變更執行階段類型 → T4 GPU")
+else:
+    print("→ 使用 CPU（一樣可以執行，只是較慢）")
 '''
 
     md_cell = make_cell("markdown", md)

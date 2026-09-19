@@ -94,6 +94,48 @@ conda install pytorch torchvision torchaudio -c pytorch
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
+#### 🖥 GPU 後端：CUDA 與 MPS 都支援
+
+同一份程式碼在三種環境都能直接執行，每章都用同一個 `get_device()` 自動選擇：
+
+```python
+def get_device():
+    """自動選擇運算裝置：NVIDIA CUDA → Apple Silicon MPS → CPU"""
+    if torch.cuda.is_available():
+        return torch.device("cuda")      # NVIDIA GPU（Colab / Windows / Linux）
+    if torch.backends.mps.is_available():
+        return torch.device("mps")       # Apple Silicon GPU（M 系列 Mac）
+    return torch.device("cpu")           # 都沒有就用 CPU，一樣跑得動
+```
+
+| 後端 | 硬體 | 安裝 | 課程支援度 |
+|------|------|------|------------|
+| **cuda** | NVIDIA 顯示卡（Colab / Windows / Linux） | 需裝對應 CUDA 版本的 wheel | 全部功能 |
+| **mps** | Apple Silicon（M1～M5 Mac） | `pip install torch` 即可，無需額外設定 | 除 AMP 的 `GradScaler` 外全部可用 |
+| **cpu** | 任何機器 | 預設 | 全部可用，訓練較慢 |
+
+> ⚠️ **Mac 上沒有 CUDA** — `torch.cuda.is_available()` 在 Mac 永遠是 `False`。
+> 網路上很多教學只寫 `"cuda" if torch.cuda.is_available() else "cpu"`，
+> 那樣在 Mac 上會白白浪費 GPU，本課程一律用上面的三路偵測。
+
+**MPS 的已知限制**（第 9、10 章有對應處理）
+
+| 項目 | CUDA | MPS |
+|------|:----:|-----|
+| FP16 推論 `.half()` | ✅ | ✅ |
+| `torch.amp.autocast` | ✅ | ✅ |
+| `torch.amp.GradScaler` | ✅ | ❌ 不支援（MPS 不需要 loss 縮放，直接 `backward()`） |
+| 記憶體查詢 | `torch.cuda.memory_allocated()` | `torch.mps.current_allocated_memory()` |
+| 清快取 | `torch.cuda.empty_cache()` | `torch.mps.empty_cache()` |
+| 隨機種子 | `torch.cuda.manual_seed_all()` | `torch.mps.manual_seed()` |
+| `torch.backends.cudnn.*` | ✅ | ❌ 沒有 cuDNN，設定無效 |
+
+少數算子還沒有 MPS 實作，遇到 `NotImplementedError` 時設定環境變數讓它自動退回 CPU：
+
+```bash
+export PYTORCH_ENABLE_MPS_FALLBACK=1
+```
+
 ### 3. 取得課程
 
 ```bash
@@ -163,9 +205,9 @@ torch.save(model.state_dict(), '/content/drive/MyDrive/model.pth')
 ```python
 import torch
 print(f"PyTorch 版本: {torch.__version__}")
-print(f"CUDA 可用: {torch.cuda.is_available()}")
-print(f"CUDA 版本: {torch.version.cuda}")
-# 沒有 GPU 也可以完成所有課程，只是訓練速度較慢
+print(f"CUDA（NVIDIA GPU）可用: {torch.cuda.is_available()}")
+print(f"MPS（Apple Silicon GPU）可用: {torch.backends.mps.is_available()}")
+# 兩個都是 False 也沒關係，CPU 一樣可以完成所有課程，只是訓練速度較慢
 ```
 
 ---
@@ -176,33 +218,33 @@ print(f"CUDA 版本: {torch.version.cuda}")
 
 | 章節 | 主題 | 核心內容 | 行數 | Colab |
 |:----:|------|----------|:----:|:-----:|
-| [01](chapters/01_tensors.py) | **Tensor 張量基礎** | 建立 Tensor、基本運算、索引切片、形狀操作、Broadcasting、GPU 加速、NumPy 互轉 | 464 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/01_tensors.ipynb) |
+| [01](chapters/01_tensors.py) | **Tensor 張量基礎** | 建立 Tensor、基本運算、索引切片、形狀操作、Broadcasting、GPU 加速、NumPy 互轉 | 494 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/01_tensors.ipynb) |
 | [02](chapters/02_autograd.py) | **自動微分 Autograd** | requires_grad、計算圖、反向傳播、梯度累加陷阱、停止追蹤、用 Autograd 實作線性迴歸 | 342 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/02_autograd.ipynb) |
 
 ### 第二部分：模型建構
 
 | 章節 | 主題 | 核心內容 | 行數 | Colab |
 |:----:|------|----------|:----:|:-----:|
-| [03](chapters/03_neural_networks.py) | **神經網路建構** | nn.Module、nn.Sequential、激活函數、CNN 基礎、Dropout/BatchNorm/Embedding、殘差連接 | 466 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/03_neural_networks.ipynb) |
-| [04](chapters/04_training_workflow.py) | **訓練工作流程** | Loss Function、Optimizer、Dataset/DataLoader、完整訓練迴圈、學習率排程、Early Stopping | 600 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/04_training_workflow.ipynb) |
+| [03](chapters/03_neural_networks.py) | **神經網路建構** | nn.Module、nn.Sequential、激活函數、CNN 基礎、Dropout/BatchNorm/Embedding、殘差連接 | 479 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/03_neural_networks.ipynb) |
+| [04](chapters/04_training_workflow.py) | **訓練工作流程** | Loss Function、Optimizer、Dataset/DataLoader、完整訓練迴圈、學習率排程、Early Stopping | 612 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/04_training_workflow.ipynb) |
 
 ### 第三部分：實戰應用
 
 | 章節 | 主題 | 核心內容 | 行數 | Colab |
 |:----:|------|----------|:----:|:-----:|
-| [05](chapters/05_cnn_image_classification.py) | **實戰：CNN 影像辨識** | CIFAR-10 資料集、資料增強、CNN 架構設計、VGG 風格網路、類別準確率分析 | 434 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/05_cnn_image_classification.ipynb) |
-| [06](chapters/06_nlp_text_classification.py) | **實戰：NLP 文字分類** | 文字前處理、詞嵌入、RNN/LSTM、雙向 LSTM 情感分析、Packed Sequences | 525 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/06_nlp_text_classification.ipynb) |
-| [07](chapters/07_transfer_learning.py) | **遷移學習** | 預訓練模型載入、Feature Extraction、Fine-tuning、差異化學習率、ImageFolder | 431 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/07_transfer_learning.ipynb) |
-| [08](chapters/08_gan.py) | **實戰：生成對抗網路** | GAN 原理、Generator/Discriminator 設計、對抗訓練、CGAN 條件式生成 | 448 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/08_gan.ipynb) |
+| [05](chapters/05_cnn_image_classification.py) | **實戰：CNN 影像辨識** | CIFAR-10 資料集、資料增強、CNN 架構設計、VGG 風格網路、類別準確率分析 | 447 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/05_cnn_image_classification.ipynb) |
+| [06](chapters/06_nlp_text_classification.py) | **實戰：NLP 文字分類** | 文字前處理、詞嵌入、RNN/LSTM、雙向 LSTM 情感分析、Packed Sequences | 538 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/06_nlp_text_classification.ipynb) |
+| [07](chapters/07_transfer_learning.py) | **遷移學習** | 預訓練模型載入、Feature Extraction、Fine-tuning、差異化學習率、ImageFolder | 444 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/07_transfer_learning.ipynb) |
+| [08](chapters/08_gan.py) | **實戰：生成對抗網路** | GAN 原理、Generator/Discriminator 設計、對抗訓練、CGAN 條件式生成 | 461 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/08_gan.ipynb) |
 
 ### 第四部分：進階部署
 
 | 章節 | 主題 | 核心內容 | 行數 | Colab |
 |:----:|------|----------|:----:|:-----:|
-| [09](chapters/09_deployment.py) | **模型部署** | 模型儲存/載入/Checkpoint、TorchScript、ONNX 匯出、推論優化、Flask/FastAPI 服務化 | 536 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/09_deployment.ipynb) |
-| [10](chapters/10_best_practices.py) | **最佳實踐** | 10 大常見錯誤、記憶體管理、可重現性、訓練技巧集錦、專案結構、效能分析 | 617 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/10_best_practices.ipynb) |
+| [09](chapters/09_deployment.py) | **模型部署** | 模型儲存/載入/Checkpoint、TorchScript、ONNX 匯出、推論優化、Flask/FastAPI 服務化 | 559 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/09_deployment.ipynb) |
+| [10](chapters/10_best_practices.py) | **最佳實踐** | 10 大常見錯誤、記憶體管理、可重現性、訓練技巧集錦、專案結構、效能分析 | 651 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ChunPingWang/pytorach-tutorial/blob/main/notebooks/10_best_practices.ipynb) |
 
-> 📊 **總計 4,863 行**教學程式碼，每行都有中文註解。
+> 📊 **總計 5,027 行**教學程式碼，每行都有中文註解。
 
 ---
 
@@ -469,8 +511,12 @@ x.squeeze()                # 移除大小為 1 的維度
 x.permute(2, 0, 1)         # 重排維度
 x.flatten(1)               # 攤平
 
-# GPU
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# GPU（CUDA / MPS / CPU 自動選）
+device = torch.device(
+    "cuda" if torch.cuda.is_available()
+    else "mps" if torch.backends.mps.is_available()
+    else "cpu"
+)
 x = x.to(device)
 ```
 
@@ -655,14 +701,14 @@ python3 chapters/05_cnn_image_classification.py
 
 ### 環境比較總覽
 
-| 比較項目 | Windows 原生 | WSL |
-|----------|:------------:|:---:|
-| 安裝難度 | 簡單 | 中等（需先安裝 WSL） |
-| UTF-8 支援 | 需設定環境變數 | 原生支援 |
-| GPU 加速 | 直接支援 | WSL2 支援（需 Windows 驅動） |
-| torch.compile | 不支援 Triton | 支援 |
-| num_workers > 0 | 需注意（已設為 0） | 正常使用 |
-| 適合場景 | 快速學習、日常開發 | 接近 Linux 生產環境 |
+| 比較項目 | Windows 原生 | WSL | macOS（Apple Silicon） |
+|----------|:------------:|:---:|:----------------------:|
+| 安裝難度 | 簡單 | 中等（需先安裝 WSL） | 簡單（`pip install torch`） |
+| UTF-8 支援 | 需設定環境變數 | 原生支援 | 原生支援 |
+| GPU 加速 | CUDA 直接支援 | WSL2 支援 CUDA（需 Windows 驅動） | MPS（沒有 CUDA） |
+| torch.compile | 不支援 Triton | 支援 | 部分支援 |
+| num_workers > 0 | 需注意（已設為 0） | 正常使用 | 正常使用 |
+| 適合場景 | 快速學習、日常開發 | 接近 Linux 生產環境 | 本機開發、輕量訓練 |
 
 > 💡 **建議**：如果只是想學習 PyTorch 基礎，使用 Windows 原生環境最簡單。如果未來要部署到 Linux 伺服器，建議使用 WSL 以熟悉 Linux 環境。
 
@@ -674,6 +720,8 @@ python3 chapters/05_cnn_image_classification.py
 <summary><b>Q: 沒有 GPU 可以學嗎？</b></summary>
 
 可以！所有章節都能在 CPU 上執行。GPU 只是讓訓練速度更快，不影響學習。建議可以用 [Google Colab](https://colab.research.google.com/)（免費 GPU）來練習較大的模型 — 點[課程目錄](#-課程目錄)每章後面的 Colab 徽章就能直接開啟。
+
+如果是 **Apple Silicon 的 Mac（M1～M5）**，課程會自動用 MPS 吃到內建 GPU，不需要任何額外設定，詳見 [GPU 後端說明](#-gpu-後端cuda-與-mps-都支援)。
 </details>
 
 <details>
