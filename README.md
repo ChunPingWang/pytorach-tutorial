@@ -110,7 +110,26 @@ python chapters/01_tensors.py
 python chapters/05_cnn_image_classification.py
 ```
 
-### 5. 驗證安裝
+### 5. 用 Jupyter Notebook 學習（推薦）
+
+`notebooks/` 底下有每一章對應的 `.ipynb`，程式碼與 `chapters/*.py` 完全相同，
+但已依小節切成 cell，可以一格一格執行、隨時修改參數做實驗。
+小節標題改用 Markdown 呈現，原本純排版用的標頭 print 則已移除。
+
+```bash
+pip install jupyterlab
+jupyter lab notebooks/          # 或 jupyter notebook notebooks/
+```
+
+Notebook 由腳本自動產生，若修改了 `chapters/*.py`，重新產生即可：
+
+```bash
+python tools/py_to_notebook.py                          # 全部章節
+python tools/py_to_notebook.py chapters/01_tensors.py   # 單一章節
+python tools/py_to_notebook.py --keep-headers           # 保留標頭 print
+```
+
+### 6. 驗證安裝
 
 ```python
 import torch
@@ -311,6 +330,14 @@ loss.backward()  # 自動計算梯度！
 pytorach-tutorial/
 │
 ├── 📄 README.md                              ← 你正在看的這個檔案
+│
+├── 📁 notebooks/                             ← 每章對應的 Jupyter Notebook
+│   ├── 01_tensors.ipynb                      # 內容與 chapters/*.py 相同
+│   ├── ...                                   # 已依小節切成 cell，可逐格執行
+│   └── 10_best_practices.ipynb
+│
+├── 📁 tools/                                 ← 輔助工具
+│   └── py_to_notebook.py                     # chapters/*.py → notebooks/*.ipynb
 │
 └── 📁 chapters/                              ← 所有教學章節
     ├── 01_tensors.py                         # Tensor 張量基礎
