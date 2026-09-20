@@ -136,6 +136,39 @@ def get_device():
 export PYTORCH_ENABLE_MPS_FALLBACK=1
 ```
 
+#### ✅ MPS 實測結果
+
+全部 10 章都在 Apple Silicon 上實際跑過，**沒有任何一章需要 `PYTORCH_ENABLE_MPS_FALLBACK`**。
+
+> 實測環境：Apple M5 · 32 GB RAM · macOS 26.5 · Python 3.12.7 · PyTorch 2.14.0 · torchvision 0.29.0
+
+| 章節 | 執行時間 | 結果 |
+|:----:|---------:|------|
+| 01 Tensor 基礎 | < 1 秒 | ✅ CUDA/MPS 偵測、GPU 運算、裝置搬移皆正常 |
+| 02 Autograd | 1 秒 | ✅ 純 CPU 章節，無裝置程式碼 |
+| 03 神經網路 | 1 秒 | ✅ 模型搬到 MPS、train/eval 切換正常 |
+| 04 訓練流程 | 6 秒 | ✅ 完整訓練迴圈 + 早停 + 學習率排程 |
+| 05 CNN 影像辨識 | **2 分 55 秒** | ✅ CIFAR-10 完整 15 epochs，**Test Acc 78.5%** |
+| 06 NLP 文字分類 | 81 秒 | ✅ LSTM 情感分析訓練收斂（Accuracy 100%，資料集小） |
+| 07 遷移學習 | 12 秒 | ✅ **Test Acc 93.0%**，凍結 11,176,512 / 可訓練 132,613 參數 |
+| 08 GAN | **3 分 55 秒** | ✅ MNIST 完整 5 epochs，D/G loss 正常對抗，CGAN 條件生成正常 |
+| 09 模型部署 | 3 秒 | ✅ TorchScript、ONNX 匯出、**MPS FP16 推論**皆通過 |
+| 10 最佳實踐 | 5 秒 | ✅ **MPS 混合精度**、`torch.mps` 記憶體統計、種子設定皆正常 |
+
+第 5 章的訓練曲線（15 epochs，batch size 64）：
+
+| Epoch | Train Acc | Test Acc |
+|:-----:|:---------:|:--------:|
+| 1 | 39.1% | 53.3% |
+| 5 | 63.3% | 70.8% |
+| 10 | 69.8% | 76.5% |
+| 15 | 74.6% | **78.5%** |
+
+Train 74.6% / Test 78.5%，測試準確率高於訓練準確率，代表資料增強有效、沒有過擬合。
+
+> 💡 資料集下載才是瓶頸，不是訓練 — 第 5 章 15 個 epoch 只要 3 分鐘，但 CIFAR-10 下載可能卡上好幾十分鐘，
+> 解法見 [FAQ：卡在資料集下載](#-常見問題)。
+
 ### 3. 取得課程
 
 ```bash
@@ -732,6 +765,55 @@ python3 chapters/05_cnn_image_classification.py
 第 5～8 章要訓練模型，notebook 已設定用 GPU 執行階段開啟；如果設定 cell 顯示「目前是 CPU 執行階段」，手動切換 **執行階段 → 變更執行階段類型 → T4 GPU** 再重跑即可。
 
 注意 Colab 的檔案（`./data` 的資料集、訓練出的 `.pth`）在執行階段結束後會清空，需要保留請用 `files.download()` 下載或掛載 Google Drive。
+</details>
+
+<details>
+<summary><b>Q: 執行第 5 章時卡在資料集下載不動，怎麼辦？</b></summary>
+
+**症狀**：畫面停在 `0.8%`（或任何百分比）不再前進，程式既不報錯也不結束，可以卡好幾個小時。
+
+**原因**：`torchvision` 內部用 `urlretrieve` 下載，**沒有設定 timeout**。CIFAR-10 的來源站 `cs.toronto.edu` 在台灣連線常常降速到幾 KB/s 甚至靜默斷流，連線斷掉後程式不會拋錯，就這樣無限等下去。（第 8 章的 MNIST 放在 AWS S3，通常幾十秒就下載完，比較少遇到。）
+
+**解法一：手動用 `curl` 下載（推薦）**
+
+把檔案放到執行目錄下的 `data/`，`torchvision` 會驗證 md5 後直接解壓，不會再連網：
+
+```bash
+mkdir -p data && cd data
+curl -L -C - --retry 10 --retry-all-errors \
+     --speed-time 20 --speed-limit 51200 \
+     -o cifar-10-python.tar.gz \
+     https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz
+
+md5 -q cifar-10-python.tar.gz   # macOS；Linux 用 md5sum
+# 應為 c58f30108f718f92721af3b95e74349a
+```
+
+關鍵參數：
+- `-C -` 續傳，斷掉後再執行一次就從中斷處接著下載
+- `--speed-time 20 --speed-limit 51200` 速度低於 50 KB/s 連續 20 秒就主動斷線（重連往往比苦等有效）
+
+**解法二：反覆續傳直到完成**
+
+來源站不穩時，一次抓不完，用迴圈讓它自己重連（實測每輪約能推進 10～30 MB）：
+
+```bash
+cd data
+for i in $(seq 1 60); do
+  sz=$(stat -f%z cifar-10-python.tar.gz 2>/dev/null || echo 0)   # Linux: stat -c%s
+  [ "$sz" -ge 170498071 ] && { echo "✓ 下載完成"; break; }
+  echo "[$i] $((sz/1024/1024)) MB / 163 MB"
+  curl -sL -C - --connect-timeout 15 --speed-time 20 --speed-limit 51200 \
+       -o cifar-10-python.tar.gz \
+       https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz
+done
+```
+
+**解法三：改用 Colab**
+
+Google 機房對外頻寬充足，同一個資料集通常幾十秒就下載完。點課程目錄的 Colab 徽章開啟第 5 章即可。
+
+> ⚠️ 中斷過的檔案一定要驗 md5 再使用 — 半途中斷的壓縮檔會在解壓階段才爆錯，訊息看起來像是程式的 bug，其實只是檔案不完整。
 </details>
 
 <details>
